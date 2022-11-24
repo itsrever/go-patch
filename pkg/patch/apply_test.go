@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestApplyIgnoresEmptyPatch(t *testing.T) {
@@ -155,6 +156,35 @@ func TestApplySubStructs(t *testing.T) {
 	assert.Equal(t, "Darth", a.Contact.FirstName)
 	assert.Equal(t, "Vader", a.Contact.LastName)
 	assert.Equal(t, 100500, a.Salary)
+}
+
+// TODO: test without the json annotation --> it fails
+func TestApplyNewSubsPointerStructs(t *testing.T) {
+	type TargetPerson struct {
+		FirstName string `json:"first_name"`
+		LastName  string `json:"last_name"`
+	}
+	type Target struct {
+		Contact *TargetPerson `json:"contact"`
+		Salary  int           `json:"salary"`
+	}
+
+	var a = Target{
+		Contact: nil,
+		Salary:  123,
+	}
+
+	patch := `{"contact": {"first_name":"Darth", "last_name": "Vader"}}`
+	p := make(map[string]interface{})
+	jsonErr := json.Unmarshal([]byte(patch), &p)
+	assert.NoError(t, jsonErr)
+
+	chg, err := Apply(&a, p)
+
+	assert.NoError(t, err)
+	require.True(t, chg)
+	assert.Equal(t, "Darth", a.Contact.FirstName)
+	assert.Equal(t, "Vader", a.Contact.LastName)
 }
 
 type Position int32
