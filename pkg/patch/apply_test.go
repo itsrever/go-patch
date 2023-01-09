@@ -190,3 +190,22 @@ func TestEnums(t *testing.T) {
 	assert.Equal(t, "Vader", a.LastName)
 	assert.Equal(t, Position_Sith, a.Position)
 }
+
+func TestSkipConversionErrors(t *testing.T) {
+	type Target struct {
+		Characters []string `json:"characters"`
+	}
+	var a = &Target{
+		Characters: []string{"Anakin Skywalker"},
+	}
+
+	newWrongCharacters := `{"characters":[1,2,3]}`
+	p := make(map[string]interface{})
+	jsonErr := json.Unmarshal([]byte(newWrongCharacters), &p)
+	assert.NoError(t, jsonErr)
+
+	_, err := Apply(&a, p)
+	assert.Error(t, err)
+	assert.Equal(t, err.Error(), "can't convert characters to dst type")
+	assert.Equal(t, []string{"Anakin Skywalker"}, a.Characters) // unchanged
+}

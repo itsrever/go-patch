@@ -49,6 +49,10 @@ func Apply(target interface{}, patch map[string]interface{}) (changed bool, err 
 			changed = true
 		}
 
+		if !srcValue.CanConvert(reflect.TypeOf(dstField.Value())) {
+			err = fmt.Errorf("can't convert %v to dst type", name)
+			return
+		}
 		srcValue = srcValue.Convert(reflect.TypeOf(dstField.Value()))
 		err = dstField.Set(srcValue.Interface())
 		if err != nil {
