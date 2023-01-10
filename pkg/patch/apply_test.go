@@ -227,3 +227,25 @@ func TestUpdateArrays(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, []string{"Darth Vader", "Luke Skywalker"}, a.Characters)
 }
+
+const Red = 0
+const Blue = 1
+const Green = 2
+
+func TestUpdateIntArrays(t *testing.T) {
+	type Target struct {
+		LaserColors []int `json:"laser_colors"`
+	}
+	var a = &Target{
+		LaserColors: []int{Green},
+	}
+
+	newLaserColors := `{"laser_colors":[0,1]}`
+	p := make(map[string]interface{})
+	jsonErr := json.Unmarshal([]byte(newLaserColors), &p)
+	assert.NoError(t, jsonErr)
+
+	_, err := Apply(&a, p)
+	assert.NoError(t, err)
+	assert.Equal(t, []int{Red, Blue}, a.LaserColors)
+}
