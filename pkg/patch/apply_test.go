@@ -209,3 +209,21 @@ func TestSkipConversionErrors(t *testing.T) {
 	assert.Equal(t, err.Error(), "can't convert characters to dst type")
 	assert.Equal(t, []string{"Anakin Skywalker"}, a.Characters) // unchanged
 }
+
+func TestUpdateArrays(t *testing.T) {
+	type Target struct {
+		Characters []string `json:"characters"`
+	}
+	var a = &Target{
+		Characters: []string{"Anakin Skywalker"},
+	}
+
+	newCharacters := `{"characters":["Darth Vader", "Luke Skywalker"]}`
+	p := make(map[string]interface{})
+	jsonErr := json.Unmarshal([]byte(newCharacters), &p)
+	assert.NoError(t, jsonErr)
+
+	_, err := Apply(&a, p)
+	assert.NoError(t, err)
+	assert.Equal(t, []string{"Darth Vader", "Luke Skywalker"}, a.Characters)
+}

@@ -22,12 +22,21 @@ func Apply(target interface{}, patch map[string]interface{}) (changed bool, err 
 		if !ok {
 			continue // skip non-existing fields
 		}
+		dstKind := dstField.Kind()
+		dstValue := dstField.Value()
+		srcValue := reflect.ValueOf(value)
+		srcValue = reflect.Indirect(srcValue)
 
-		if dstField.Kind() == reflect.Struct ||
-			(dstField.Kind() == reflect.Pointer &&
-				reflect.Indirect(reflect.ValueOf(dstField.Value())).Kind() == reflect.Struct) {
-			// recursive for structs and pointers to structs
-			iChanged, iErr := Apply(dstField.Value(), value.(map[string]interface{}))
+		// recursive for structs and pointers to structs
+		if dstKind == reflect.Struct ||
+			(dstKind == reflect.Pointer &&
+				reflect.Indirect(reflect.ValueOf(dstValue)).Kind() == reflect.Struct) {
+			valueAsStruct, ok := value.(map[string]interface{})
+			if !ok {
+				err = fmt.Errorf("%v is not a struct", name)
+				return
+			}
+			iChanged, iErr := Apply(dstValue, valueAsStruct)
 			if iErr != nil {
 				err = iErr
 				return
@@ -36,23 +45,44 @@ func Apply(target interface{}, patch map[string]interface{}) (changed bool, err 
 			continue
 		}
 
-		var srcValue = reflect.ValueOf(value)
-		srcValue = reflect.Indirect(srcValue)
-		if skind, dkind := srcValue.Kind(), dstField.Kind(); skind != dkind {
-			srcValue, err = casting(value, dstField)
-			if err != nil {
-				return
-			}
-		}
-
-		if !reflect.DeepEqual(srcValue.Interface(), dstField.Value()) {
+		if !reflect.DeepEqual(value, dstValue) {
 			changed = true
 		}
 
-		if !srcValue.CanConvert(reflect.TypeOf(dstField.Value())) {
+		// handling of setting arrays/slices
+		if dstKind == reflect.Slice {
+			dstElemType := reflect.TypeOf(dstValue).Elem()
+			castedArray := reflect.MakeSlice(reflect.TypeOf(dstValue), srcValue.Len(), srcValue.Len())
+			valueAsArray, ok := value.([]interface{})
+			if !ok {
+				err = fmt.Errorf("%v is not an array", name)
+				return
+			}
+			for i, srcElemValue := range valueAsArray {
+				reflectSrcElemValue := reflect.ValueOf(srcElemValue)
+				if !reflectSrcElemValue.CanConvert(dstElemType) {
+					err = fmt.Errorf("can't convert %v to dst type", name)
+					break
+				}
+				castedArray.Index(i).Set(reflectSrcElemValue.Convert(dstElemType))
+			}
+			if err != nil {
+				return
+			}
+			err = dstField.Set(castedArray.Interface())
+			if err != nil {
+				return
+			}
+			continue
+
+		}
+
+		// other values
+		if !srcValue.CanConvert(reflect.TypeOf(dstValue)) {
 			err = fmt.Errorf("can't convert %v to dst type", name)
 			return
 		}
+
 		srcValue = srcValue.Convert(reflect.TypeOf(dstField.Value()))
 		err = dstField.Set(srcValue.Interface())
 		if err != nil {
@@ -61,42 +91,6 @@ func Apply(target interface{}, patch map[string]interface{}) (changed bool, err 
 
 	}
 	return
-}
-
-func casting(src interface{}, dst *structs.Field) (reflect.Value, error) {
-	switch dst.Kind() {
-	case reflect.Int:
-		f, ok := src.(float64)
-		if ok {
-			i := int(f)
-			return reflect.Indirect(reflect.ValueOf(i)), nil
-		}
-	case reflect.Int8:
-		f, ok := src.(float64)
-		if ok {
-			i := int8(f)
-			return reflect.Indirect(reflect.ValueOf(i)), nil
-		}
-	case reflect.Int16:
-		f, ok := src.(float64)
-		if ok {
-			i := int16(f)
-			return reflect.Indirect(reflect.ValueOf(i)), nil
-		}
-	case reflect.Int32:
-		f, ok := src.(float64)
-		if ok {
-			i := int32(f)
-			return reflect.Indirect(reflect.ValueOf(i)), nil
-		}
-	case reflect.Int64:
-		f, ok := src.(float64)
-		if ok {
-			i := int64(f)
-			return reflect.Indirect(reflect.ValueOf(i)), nil
-		}
-	}
-	return reflect.Value{}, fmt.Errorf("field `%v` types mismatch while patching: %v vs %v", src, dst.Kind(), reflect.ValueOf(src).Kind())
 }
 
 func findField(dst *structs.Struct, name string) (*structs.Field, bool) {
