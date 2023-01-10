@@ -157,6 +157,35 @@ func TestApplySubStructs(t *testing.T) {
 	assert.Equal(t, 100500, a.Salary)
 }
 
+func TestApplyNilSubStructs(t *testing.T) {
+	type TargetPerson struct {
+		FirstName string `json:"first_name"`
+		LastName  string `json:"last_name"`
+		Position  string `json:"position"`
+	}
+	type Target struct {
+		Contact *TargetPerson `json:"contact"`
+		Salary  int           `json:"salary"`
+	}
+
+	var a = Target{
+		Contact: nil,
+		Salary:  123,
+	}
+
+	data := `{"contact": {"first_name":"Darth", "last_name": "Vader"}}`
+	p := make(map[string]interface{})
+	jsonErr := json.Unmarshal([]byte(data), &p)
+	assert.NoError(t, jsonErr)
+
+	chg, err := Apply(&a, p)
+	assert.NoError(t, err)
+	assert.True(t, chg)
+	assert.Equal(t, a.Contact.FirstName, "Darth")
+	assert.Equal(t, a.Contact.LastName, "Vader")
+	assert.Equal(t, a.Contact.Position, "")
+}
+
 type Position int32
 
 const (

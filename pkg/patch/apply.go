@@ -25,18 +25,43 @@ func Apply(target interface{}, patch map[string]interface{}) (changed bool, err 
 		dstKind := dstField.Kind()
 		dstValue := dstField.Value()
 		srcValue := reflect.ValueOf(value)
-		srcValue = reflect.Indirect(srcValue)
+		srcValueAsStruct, isSrcValueAStruct := value.(map[string]interface{})
 
-		// recursive for structs and pointers to structs
-		if dstKind == reflect.Struct ||
-			(dstKind == reflect.Pointer &&
-				reflect.Indirect(reflect.ValueOf(dstValue)).Kind() == reflect.Struct) {
-			valueAsStruct, ok := value.(map[string]interface{})
-			if !ok {
-				err = fmt.Errorf("%v is not a struct", name)
+		// recursive for a nil value of a pointer to struct
+		if dstKind == reflect.Pointer && dstField.IsZero() && isSrcValueAStruct {
+			targetType := reflect.TypeOf(target)
+			if targetType.Kind() == reflect.Pointer {
+				targetType = targetType.Elem()
+			}
+			sField, _ := targetType.FieldByName(dstField.Name())
+			sFieldType := sField.Type
+			if sFieldType.Kind() == reflect.Pointer {
+				sFieldType = sFieldType.Elem()
+			}
+			newDestStruct := reflect.New(sFieldType)
+			valueToSet := newDestStruct.Interface()
+			iChanged, iErr := Apply(valueToSet, srcValueAsStruct)
+			if iErr != nil {
+				err = iErr
 				return
 			}
-			iChanged, iErr := Apply(dstValue, valueAsStruct)
+			err = dstField.Set(valueToSet)
+			if err != nil {
+				return
+			}
+			changed = changed || iChanged
+			continue
+		}
+
+		// not compatible types (different kind)
+		if !isSrcValueAStruct && dstKind == reflect.Struct {
+			err = fmt.Errorf("%v is not a struct", name)
+		}
+
+		// recursive for structs and pointers to existing structs
+		if isSrcValueAStruct && (dstKind == reflect.Struct ||
+			(dstKind == reflect.Pointer && reflect.Indirect(reflect.ValueOf(dstValue)).Kind() == reflect.Struct)) {
+			iChanged, iErr := Apply(dstValue, srcValueAsStruct)
 			if iErr != nil {
 				err = iErr
 				return
