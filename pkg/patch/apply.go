@@ -84,12 +84,28 @@ func Apply(target interface{}, patch map[string]interface{}) (changed bool, err 
 				return
 			}
 			for i, srcElemValue := range valueAsArray {
-				reflectSrcElemValue := reflect.ValueOf(srcElemValue)
-				if !reflectSrcElemValue.CanConvert(dstElemType) {
-					err = fmt.Errorf("can't convert %v to dst type", name)
-					break
+				valueToApply, isStruct := srcElemValue.(map[string]interface{})
+				if isStruct {
+					if dstElemType.Kind() == reflect.Pointer {
+						dstElemType = dstElemType.Elem()
+					}
+					newArrayElem := reflect.New(dstElemType)
+					elem := newArrayElem.Interface()
+					_, err = Apply(elem, valueToApply)
+					if err != nil {
+						return
+					}
+					castedArray.Index(i).Set(newArrayElem)
+				} else {
+					// simple values
+					reflectSrcElemValue := reflect.ValueOf(srcElemValue)
+					if !reflectSrcElemValue.CanConvert(dstElemType) {
+						err = fmt.Errorf("can't convert %v to dst type", name)
+						break
+					}
+					castedArray.Index(i).Set(reflectSrcElemValue.Convert(dstElemType))
 				}
-				castedArray.Index(i).Set(reflectSrcElemValue.Convert(dstElemType))
+
 			}
 			if err != nil {
 				return

@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestApplyIgnoresEmptyPatch(t *testing.T) {
@@ -255,6 +256,29 @@ func TestUpdateArrays(t *testing.T) {
 	_, err := Apply(&a, p)
 	assert.NoError(t, err)
 	assert.Equal(t, []string{"Darth Vader", "Luke Skywalker"}, a.Characters)
+}
+
+func TestUpdateArrayOfStructs(t *testing.T) {
+	type Person struct {
+		FirstName string `json:"first_name"`
+		LastName  string `json:"last_name"`
+	}
+	type Target struct {
+		Characters []*Person `json:"characters"`
+	}
+	var a = &Target{
+		Characters: []*Person{{FirstName: "Anakin", LastName: "Skywalker"}},
+	}
+
+	newCharacters := `{"characters":[{"first_name":"Darth Vader"}, {"first_name":"Luke Skywalker"}]}`
+	p := make(map[string]interface{})
+	jsonErr := json.Unmarshal([]byte(newCharacters), &p)
+	assert.NoError(t, jsonErr)
+
+	_, err := Apply(&a, p)
+	require.NoError(t, err)
+	assert.Equal(t, 2, len(a.Characters))
+	assert.Equal(t, a.Characters[0].FirstName, "Darth Vader")
 }
 
 const Red = 0
